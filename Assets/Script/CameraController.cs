@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -21,31 +22,44 @@ public class CameraController : MonoBehaviour
 
     private void FixedUpdate() {
 
-        if (carCameraSwitched) {
+        float speed = 50f;
+        if (carCameraSwitched)
+        {
             TranslationHandler();
             RotationHandler();
         }
-        else {
-
-            float targetZoom = Camera.main.orthographicSize,
-            scroll = Input.GetAxis("Mouse ScrollWheel"),
-            velocity = 0;
-            targetZoom -= Mathf.Clamp(3 * scroll, 2, 8);
-            Camera.main.orthographicSize = Mathf.SmoothDamp(Camera.main.orthographicSize, targetZoom, ref velocity, 0.25f);
+        else
+        {
 
             if (Input.GetMouseButtonDown(0))
             {
                 dragOrigin = Input.mousePosition;
                 return;
             }
-    
-            if (!Input.GetMouseButton(0))
-                return;
-    
-            Vector3 pos = Camera.main.ScreenToViewportPoint(Input.mousePosition - dragOrigin);
-            Vector3 move = new Vector3(-pos.x*0.75f, 0, -pos.y*0.75f);
-    
-            transform.Translate(move, Space.World);
+
+            if (Input.GetMouseButton(0))
+            {
+                Vector3 pos = Camera.main.ScreenToViewportPoint(Input.mousePosition - dragOrigin);
+                Vector3 move = -2f * new Vector3(pos.x, 0, pos.y);
+                Vector3 moveDir = move.z * transform.forward + move.x * transform.right;
+                moveDir.y = 0f;
+
+                transform.Translate(moveDir, Space.World);
+            }
+
+            if (Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt))
+            {
+                transform.localEulerAngles += speed * new Vector3(-Input.GetAxis("Mouse Y"), Input.GetAxis("Mouse X"), 0f) * Time.deltaTime;
+            }
+
+            if (Input.GetAxis("Mouse ScrollWheel") > 0f)
+            {
+                transform.Translate(speed * transform.forward * Time.deltaTime, Space.World);
+            }
+            else if (Input.GetAxis("Mouse ScrollWheel") < 0f)
+            {
+                transform.Translate(speed * -transform.forward * Time.deltaTime, Space.World);
+            }
         }
     }
 

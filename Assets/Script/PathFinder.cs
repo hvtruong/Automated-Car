@@ -34,13 +34,14 @@ class Node
             Physics.Raycast(rightFrontCornerPosition, rightBackCornerPosition - rightFrontCornerPosition, out hit, 4f) ||
             Physics.Raycast(rightBackCornerPosition, leftBackCornerPosition - rightBackCornerPosition, out hit, 4f) ||
             Physics.Raycast(leftBackCornerPosition, leftFrontCornerPosition - leftBackCornerPosition, out hit, 4f) ||
-            Physics.Raycast(leftFrontCornerPosition + Vector3.up, Vector3.down, out hit, 5f) ||
-            Physics.Raycast(leftBackCornerPosition + Vector3.up, Vector3.down, out hit, 5f) ||
-            Physics.Raycast(rightFrontCornerPosition + Vector3.up, Vector3.down, out hit, 5f) ||
-            Physics.Raycast(rightBackCornerPosition + Vector3.up, Vector3.down, out hit, 5f))
+            Physics.Raycast(position + Vector3.up, Vector3.down, out hit, 10f) ||
+            Physics.Raycast(leftFrontCornerPosition + Vector3.up, Vector3.down, out hit, 10f) ||
+            Physics.Raycast(leftBackCornerPosition + Vector3.up, Vector3.down, out hit, 10f) ||
+            Physics.Raycast(rightFrontCornerPosition + Vector3.up, Vector3.down, out hit, 10f) ||
+            Physics.Raycast(rightBackCornerPosition + Vector3.up, Vector3.down, out hit, 10f))
         {
             string tag = hit.transform.tag;
-            if (tag == "blocker" || tag == "terrain")
+            if (tag == "blocker" || tag == "terrain")   
                 return true;
         }
 
@@ -99,7 +100,7 @@ class PathFinder : MonoBehaviour
 
     private bool arrivedAtDestination(Vector3 position)
     {
-        return (Math.Abs(position.x - destination.x) < 2f && Math.Abs(position.z - destination.z) < 2f) ? true : false;
+        return (Math.Abs(position.x - destination.x) < 3f && Math.Abs(position.z - destination.z) < 3f) ? true : false;
     }
 
     public List<Node> GetPath()
@@ -151,7 +152,7 @@ class PathFinder : MonoBehaviour
                 }
 
                 node.g = currentNode.g + (node.position - currentNode.position).magnitude;
-                node.h = 1.5f * (float)Math.Sqrt((Math.Pow(node.position.x - endNode.position.x, 2) + Math.Pow(node.position.z - endNode.position.z, 2)));
+                node.h = 1.75f * (float)Math.Sqrt((Math.Pow(node.position.x - endNode.position.x, 2) + Math.Pow(node.position.z - endNode.position.z, 2)));
                 node.f = node.g + node.h;
 
                 bool skip = false;

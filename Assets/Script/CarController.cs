@@ -45,12 +45,26 @@ public class CarController : MonoBehaviour
             //startAutonomousCar();
             for (int i = 0; i < pathList.Count; i++)
             {
-                Debug.DrawLine(new Vector3(0, 0f, 0) + pathList[i].leftFrontCornerPosition, new Vector3(0, 0f, 0) + pathList[i].rightFrontCornerPosition);
-                Debug.DrawLine(new Vector3(0, 0f, 0) + pathList[i].rightFrontCornerPosition, new Vector3(0, 0f, 0) + pathList[i].rightBackCornerPosition);
-                Debug.DrawLine(new Vector3(0, 0f, 0) + pathList[i].rightBackCornerPosition, new Vector3(0, 0, 0) + pathList[i].leftBackCornerPosition);
-                Debug.DrawLine(new Vector3(0, 0f, 0) + pathList[i].leftBackCornerPosition, new Vector3(0, 0f, 0) + pathList[i].leftFrontCornerPosition);
+                Debug.DrawLine(pathList[i].leftFrontCornerPosition, pathList[i].rightFrontCornerPosition);
+                Debug.DrawLine(pathList[i].rightFrontCornerPosition, pathList[i].rightBackCornerPosition);
+                Debug.DrawLine(pathList[i].rightBackCornerPosition, pathList[i].leftBackCornerPosition);
+                Debug.DrawLine(pathList[i].leftBackCornerPosition, pathList[i].leftFrontCornerPosition);
+
+                Debug.DrawLine(pathList[i].leftFrontCornerPosition + Vector3.up, pathList[i].leftFrontCornerPosition + Vector3.down);
+                Debug.DrawLine(pathList[i].rightFrontCornerPosition + Vector3.up, pathList[i].rightFrontCornerPosition + Vector3.down);
+                Debug.DrawLine(pathList[i].rightBackCornerPosition + Vector3.up, pathList[i].rightBackCornerPosition + Vector3.down);
+                Debug.DrawLine(pathList[i].leftBackCornerPosition + Vector3.up, pathList[i].leftBackCornerPosition + Vector3.down);
                 if (i != pathList.Count - 1)
                     Debug.DrawLine(new Vector3(0, 3f, 0) + pathList[i].position, new Vector3(0, 3f, 0) + pathList[i + 1].position);
+
+                RaycastHit hit2;
+                if (Physics.Raycast(pathList[i].leftFrontCornerPosition + Vector3.up, Vector3.down, out hit2, 10f) ||
+                    Physics.Raycast(pathList[i].leftBackCornerPosition + Vector3.up, Vector3.down, out hit2, 10f) ||
+                    Physics.Raycast(pathList[i].rightFrontCornerPosition + Vector3.up, Vector3.down, out hit2, 10f) ||
+                    Physics.Raycast(pathList[i].rightBackCornerPosition + Vector3.up, Vector3.down, out hit2, 10f))
+                {
+                    print(hit2.transform.tag);
+                }
             }
             FollowWayPoints();
         }
@@ -133,7 +147,7 @@ public class CarController : MonoBehaviour
             Vector3 vectorToTarget = (nextWayPoint - transform.position).normalized;
             float angle = Vector3.SignedAngle(transform.forward, vectorToTarget, Vector3.up);
             horizontalInput = Mathf.Clamp(angle / 45f, -1f, 1f);
-            /*avoidObstacles();*/
+            avoidObstacles();
 
             if (rb.velocity.magnitude > 10)
             {
@@ -177,10 +191,12 @@ public class CarController : MonoBehaviour
 
     private float[] getSensorInputs()
     {
-        float[] sensorInputs = new float[9];
+        float[] sensorInputs = new float[11];
         Vector3 frontCenterForward = transform.forward,
             frontLeft = transform.forward - transform.right,
             frontRight = transform.forward + transform.right,
+            frontCenterLeft = transform.forward - 0.25f * transform.right,
+            frontCenterRight = transform.forward + 0.25f * transform.right,
             backCenterBackward = -transform.forward,
             backLeft = -transform.forward - transform.right,
             backRight = -transform.forward + transform.right;
@@ -189,6 +205,8 @@ public class CarController : MonoBehaviour
             backCenterBackward,
             frontLeft,
             frontRight,
+            frontCenterLeft,
+            frontCenterRight,
             backLeft,
             backRight
         };
@@ -197,7 +215,7 @@ public class CarController : MonoBehaviour
         foreach (Vector3 sensor in sensors)
         {
             RaycastHit hit;
-            float distanceToBlocker = 0, maxDistance = 30;
+            float distanceToBlocker = 30, maxDistance = 30;
             Vector3 sensorPosition, sensorLine;
 
             if (i <= 1)
@@ -209,6 +227,11 @@ public class CarController : MonoBehaviour
                 sensorPosition = transform.position + 1.75f * sensor;
             }
 
+            if (i == 4)
+                sensorPosition.x -= 0.5f;
+            else if (i == 5)
+                sensorPosition.x += 0.5f;
+
             // Direct the sensors to look diagonally
             sensorLine = transform.position + maxDistance * sensor;
 
@@ -216,7 +239,7 @@ public class CarController : MonoBehaviour
             {
                 if (hit.transform.tag == "terrain" || hit.transform.tag == "blocker")
                 {
-                    distanceToBlocker = maxDistance - hit.distance;
+                    distanceToBlocker = hit.distance;
                     Debug.DrawLine(sensorPosition, sensorLine, Color.red);
                 }
             }
@@ -240,11 +263,13 @@ public class CarController : MonoBehaviour
     private void avoidObstacles()
     {
         float[] sensorInputs = getSensorInputs();
-        if ((sensorInputs[0] != 0 && sensorInputs[0] < 5f) ||
-            (sensorInputs[1] != 0 && sensorInputs[1] < 5f) ||
-            (sensorInputs[2] != 0 && sensorInputs[2] < 5f))
+        if ((sensorInputs[0] != 0 && sensorInputs[0] < 6f) ||
+            (sensorInputs[2] != 0 && sensorInputs[2] < 6f) ||
+            (sensorInputs[3] != 0 && sensorInputs[3] < 6f) ||
+            (sensorInputs[4] != 0 && sensorInputs[4] < 6f) ||
+            (sensorInputs[5] != 0 && sensorInputs[5] < 6f))
         {
-            horizontalInput = sensorInputs[1] > sensorInputs[2] ? 1 : -1;
+            horizontalInput = (sensorInputs[2] + sensorInputs[4]) > (sensorInputs[3] + sensorInputs[5]) ? -1 : 1;
         }
     }
 
