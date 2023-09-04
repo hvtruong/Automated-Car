@@ -8,12 +8,13 @@ public class CarController : MonoBehaviour
     private float verticalInput, horizontalInput, brakingForce, steeringAngle;
     private bool isBreaking, autonomousMode = false;
     public NeuralNetwork network;
+    private Rigidbody rb;
     private PathFinder pathFinder;
-    private Vector3 destination;
+    private Vector3 destination, vectorToTarget;
     private Vector3 startPosition, startRotation;
     private List<Node> pathList;
     private int index = 0;
-    private float minDistance = float.MaxValue, lastDistance = float.MaxValue;
+    private float minDistance = float.MaxValue, lastDistance = float.MaxValue, distanceToDestination = float.MaxValue;
 
     [SerializeField] private float motorForce, brakeForce, maxSteeringAngle;
     [SerializeField] private WheelCollider FLC, BLC, FRC, BRC;
@@ -23,17 +24,18 @@ public class CarController : MonoBehaviour
     {
         startPosition = transform.position;
         startRotation = transform.eulerAngles;
+
+        rb = gameObject.GetComponent<Rigidbody>();
     }
 
     private void Update() {
 
         if (Input.GetKeyUp(KeyCode.T))
         {
-            autonomousMode ^= true;
-            index = 0;
+            autonomousMode = true;
         }
 
-        if (Input.GetKeyUp(KeyCode.Q))
+        if (Input.GetKeyUp(KeyCode.Q) && !autonomousMode)
         {
             destination = GameObject.FindGameObjectWithTag("destination").transform.position;
             pathFinder = new PathFinder(transform.position, destination, transform.forward);
@@ -56,17 +58,9 @@ public class CarController : MonoBehaviour
                 Debug.DrawLine(pathList[i].leftBackCornerPosition + Vector3.up, pathList[i].leftBackCornerPosition + Vector3.down);
                 if (i != pathList.Count - 1)
                     Debug.DrawLine(new Vector3(0, 3f, 0) + pathList[i].position, new Vector3(0, 3f, 0) + pathList[i + 1].position);
-
-                RaycastHit hit2;
-                if (Physics.Raycast(pathList[i].leftFrontCornerPosition + Vector3.up, Vector3.down, out hit2, 10f) ||
-                    Physics.Raycast(pathList[i].leftBackCornerPosition + Vector3.up, Vector3.down, out hit2, 10f) ||
-                    Physics.Raycast(pathList[i].rightFrontCornerPosition + Vector3.up, Vector3.down, out hit2, 10f) ||
-                    Physics.Raycast(pathList[i].rightBackCornerPosition + Vector3.up, Vector3.down, out hit2, 10f))
-                {
-                    print(hit2.transform.tag);
-                }
             }
             FollowWayPoints();
+            DestinationHandler();
         }
         else
             InputHandler();
@@ -134,41 +128,68 @@ public class CarController : MonoBehaviour
             return;
         }
 
-        Rigidbody rb = gameObject.GetComponent<Rigidbody>();
         Vector3 nextWayPoint = pathList[index].position;
         float distanceToWayPoint = (nextWayPoint - transform.position).magnitude;
+
         while (distanceToWayPoint < 3f && index < pathList.Count - 1)
         {
             nextWayPoint = pathList[++index].position;
             distanceToWayPoint = (nextWayPoint - transform.position).magnitude;
         }
-        if (distanceToWayPoint > 10f)
-        {
-            Vector3 vectorToTarget = (nextWayPoint - transform.position).normalized;
-            float angle = Vector3.SignedAngle(transform.forward, vectorToTarget, Vector3.up);
-            horizontalInput = Mathf.Clamp(angle / 45f, -1f, 1f);
-            avoidObstacles();
 
-            if (rb.velocity.magnitude > 10)
+        if (distanceToWayPoint > 10f || nextWayPoint == destination)
+        {
+            // Handling complte control over destination's handler if getting too close
+            if (distanceToWayPoint > 2f)
             {
-                verticalInput = 0;
-            }
-            else if (rb.velocity.magnitude > 15)
-            {
-                isBreaking = true;
-            }
-            else
-            {
-                verticalInput = (float)(1.1f - Mathf.Abs(horizontalInput) / 1.0);
+                vectorToTarget = (nextWayPoint - transform.position).normalized;
+                vectorToTarget.y = transform.forward.y;
+                
+                float angle = Vector3.SignedAngle(transform.forward, vectorToTarget, Vector3.up);
+                horizontalInput = Mathf.Clamp(angle / 45f, -1f, 1f);
+                
+                avoidObstacles();
+
+                if (rb.velocity.magnitude > 10f)
+                {
+                    verticalInput = 0;
+                }
+                else if (rb.velocity.magnitude > 15f)
+                {
+                    isBreaking = true;
+                }
+                else
+                {
+                    verticalInput = (float)(1.1f - Mathf.Abs(horizontalInput) / 1.0);
+                }
             }
         }
         else
             index++;
-
-        if ((destination - transform.position).magnitude < 20f && rb.velocity.magnitude > 7f)
-            isBreaking = true;
     }
-    
+
+    private void DestinationHandler()
+    {
+
+        distanceToDestination = (new Vector2(destination.x - transform.position.x, destination.z - transform.position.z)).magnitude;
+        if (distanceToDestination < 1f)
+        {
+            verticalInput = 0f;
+            horizontalInput = 0f;
+            isBreaking = true;
+            rb.velocity = new Vector3(0, 0, 0);
+            autonomousMode = false;
+            index = 0;
+        }
+        else if (distanceToDestination < 10f)
+        {
+            Vector3 desiredSpeed = distanceToDestination * rb.velocity.normalized;
+            if (rb.velocity.magnitude > desiredSpeed.magnitude)
+                rb.velocity = distanceToDestination * rb.velocity.normalized;
+        }
+    }
+
+
     public void saveTrainingData(float[] sensorInputs)
     {
         string inputs_path = "Assets/Script/Training_inputs.txt", output_path = "Assets/Script/Training_outputs.txt";
@@ -228,9 +249,9 @@ public class CarController : MonoBehaviour
             }
 
             if (i == 4)
-                sensorPosition.x -= 0.5f;
+                sensorPosition.x -= 0.5f * transform.right.x;
             else if (i == 5)
-                sensorPosition.x += 0.5f;
+                sensorPosition.x += 0.5f * transform.right.x;
 
             // Direct the sensors to look diagonally
             sensorLine = transform.position + maxDistance * sensor;
@@ -263,11 +284,11 @@ public class CarController : MonoBehaviour
     private void avoidObstacles()
     {
         float[] sensorInputs = getSensorInputs();
-        if ((sensorInputs[0] != 0 && sensorInputs[0] < 6f) ||
-            (sensorInputs[2] != 0 && sensorInputs[2] < 6f) ||
-            (sensorInputs[3] != 0 && sensorInputs[3] < 6f) ||
-            (sensorInputs[4] != 0 && sensorInputs[4] < 6f) ||
-            (sensorInputs[5] != 0 && sensorInputs[5] < 6f))
+        if ((sensorInputs[0] < 7f) ||
+            (sensorInputs[2] < 7f) ||
+            (sensorInputs[3] < 7f) ||
+            (sensorInputs[4] < 7f) ||
+            (sensorInputs[5] < 7f))
         {
             horizontalInput = (sensorInputs[2] + sensorInputs[4]) > (sensorInputs[3] + sensorInputs[5]) ? -1 : 1;
         }
@@ -275,9 +296,9 @@ public class CarController : MonoBehaviour
 
     private void checkOnProgress()
     {
-        if (distanceToDestination() <= 2.0f)
+        if (distanceToDestination <= 2.0f)
             autonomousMode = false;
-        if (distanceToDestination() >= (lastDistance))
+        if (distanceToDestination >= (lastDistance))
             Reset();
         else
             network.saveBestWeightsAndBiases();
@@ -294,16 +315,11 @@ public class CarController : MonoBehaviour
 
     private void OnCollisionEnter(Collision collision)
     {
-        if (minDistance < distanceToDestination())
+        if (minDistance < distanceToDestination)
         {
-            minDistance = distanceToDestination();
+            minDistance = distanceToDestination;
         }
-        Reset();
-    }
-
-    private float distanceToDestination()
-    {
-        return Vector3.Distance(transform.position, destination);
+        //Reset();
     }
 
     private void startAutonomousCar()
